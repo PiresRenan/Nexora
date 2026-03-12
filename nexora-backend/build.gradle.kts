@@ -42,6 +42,7 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
 	testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
+	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 
 	// H2 para testes de slice (@DataJpaTest sem Testcontainers)
 	testRuntimeOnly("com.h2database:h2")
@@ -49,9 +50,10 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
-	// Exibe logs dos testes no console
+	environment("SPRING_PROFILES_ACTIVE", "test")
 	testLogging {
 		events("passed", "skipped", "failed")
+		exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
 	}
 }
 
