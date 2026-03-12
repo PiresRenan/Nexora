@@ -9,117 +9,131 @@ import com.nexora.domain.exception.DuplicateResourceException;
 import com.nexora.domain.exception.ResourceNotFoundException;
 import com.nexora.domain.model.Money;
 import com.nexora.domain.model.Product;
+import com.nexora.domain.model.StockMovement;
 import com.nexora.domain.model.StockQuantity;
+import com.nexora.domain.repository.CategoryRepository;
 import com.nexora.domain.repository.ProductRepository;
+import com.nexora.domain.repository.StockMovementRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementação dos casos de uso de produto.
- * Melhoria: @Transactional nos métodos individuais com readOnly=true
- * para operações de leitura — melhora performance e deixa intenção clara.
- */
 @Service
 @Transactional
 public class ProductApplicationService implements ProductUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ProductApplicationService.class);
 
-    private final ProductRepository productRepository;
+    private final ProductRepository       productRepository;
+    private final CategoryRepository      categoryRepository;
+    private final StockMovementRepository stockMovementRepository;
 
-    public ProductApplicationService(ProductRepository productRepository) {
-        this.productRepository = productRepository;
+    public ProductApplicationService(
+            ProductRepository productRepository,
+            CategoryRepository categoryRepository,
+            StockMovementRepository stockMovementRepository
+    ) {
+        this.productRepository       = productRepository;
+        this.categoryRepository      = categoryRepository;
+        this.stockMovementRepository = stockMovementRepository;
     }
 
     @Override
     public ProductResponse createProduct(CreateProductRequest request) {
-        log.info("Creating product with SKU: {}", request.sku());
-
         if (productRepository.existsBySku(request.sku())) {
             throw new DuplicateResourceException("Product", "SKU", request.sku());
         }
-
+        UUID categoryId = null;
+        if (request.categoryId() != null) {
+            categoryRepository.findById(request.categoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Category", request.categoryId()));
+            categoryId = request.categoryId();
+        }
         var product = Product.create(
-                request.name(),
-                request.description(),
-                request.sku(),
+                request.name(), request.description(), request.sku(),
                 Money.of(request.price(), request.currency()),
-                StockQuantity.of(request.initialStock())
+                StockQuantity.of(request.initialStock()),
+                categoryId
         );
-
-        var saved = productRepository.save(product);
-        log.info("Product created successfully: {}", saved.getId());
-        return ProductResponse.fromDomain(saved);
+        // Registra entrada de estoque inicial
+        if (request.initialStock() > 0) {
+            stockMovementRepository.save(StockMovement.entry(
+                    product.getId(), request.initialStock(), 0, request.initialStock(),
+                    "INITIAL_STOCK", null, null
+            ));
+        }
+        log.info("Product created: {} (SKU: {})", product.getId(), request.sku());
+        return ProductResponse.fromDomain(productRepository.save(product));
     }
 
     @Override
     public ProductResponse updateProduct(UUID id, UpdateProductRequest request) {
-        log.info("Updating product: {}", id);
-
-        var product = findProductOrThrow(id);
-
-        product.updateDetails(
-                request.name(),
-                request.description(),
-                Money.of(request.price(), request.currency())
-        );
-
-        var saved = productRepository.save(product);
-        return ProductResponse.fromDomain(saved);
+        var product = findOrThrow(id);
+        product.updateDetails(request.name(), request.description(),
+                Money.of(request.price(), request.currency()));
+        return ProductResponse.fromDomain(productRepository.save(product));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProductResponse findById(UUID id) {
-        return ProductResponse.fromDomain(findProductOrThrow(id));
+        return ProductResponse.fromDomain(findOrThrow(id));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> findAll() {
-        return productRepository.findAll().stream()
-                .map(ProductResponse::fromDomain)
-                .toList();
+    public Page<ProductResponse> findAll(Pageable pageable) {
+        return productRepository.findAll(pageable).map(ProductResponse::fromDomain);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> findAllActive() {
-        return productRepository.findAllActive().stream()
-                .map(ProductResponse::fromDomain)
-                .toList();
+    public Page<ProductResponse> findAllActive(Pageable pageable) {
+        return productRepository.findAllActive(pageable).map(ProductResponse::fromDomain);
     }
 
     @Override
-    public ProductResponse replenishStock(UUID id, int quantity) {
-        log.info("Replenishing {} units for product: {}", quantity, id);
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> findByCategory(UUID categoryId, Pageable pageable) {
+        return productRepository.findByCategoryId(categoryId, pageable).map(ProductResponse::fromDomain);
+    }
 
-        if (quantity <= 0) {
-            throw new BusinessRuleException("Quantity to replenish must be positive, got: " + quantity);
-        }
-
-        var product = findProductOrThrow(id);
+    @Override
+    public ProductResponse replenishStock(UUID id, int quantity, UUID performedBy) {
+        if (quantity <= 0) throw new BusinessRuleException("Quantity must be positive: " + quantity);
+        var product = findOrThrow(id);
+        int before = product.getStock().value();
         product.replenishStock(quantity);
-
-        return ProductResponse.fromDomain(productRepository.save(product));
+        productRepository.save(product);
+        stockMovementRepository.save(StockMovement.entry(
+                product.getId(), quantity, before, product.getStock().value(),
+                "MANUAL_REPLENISHMENT", null, performedBy
+        ));
+        return ProductResponse.fromDomain(product);
     }
 
     @Override
     public void deleteProduct(UUID id) {
-        log.info("Deactivating product: {}", id);
-        var product = findProductOrThrow(id);
+        var product = findOrThrow(id);
         product.deactivate();
         productRepository.save(product);
     }
 
-    // ─── Private helpers ───────────────────────────────────────────────────
+    @Override
+    public ProductResponse assignCategory(UUID productId, UUID categoryId) {
+        var product  = findOrThrow(productId);
+        categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
+        product.assignCategory(categoryId);
+        return ProductResponse.fromDomain(productRepository.save(product));
+    }
 
-    private Product findProductOrThrow(UUID id) {
+    private Product findOrThrow(UUID id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
     }

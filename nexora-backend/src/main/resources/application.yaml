@@ -26,6 +26,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
     validate-on-migrate: true
+  security:
+    user:
+      name: "renan"
+      password: "14262767"
+
 
 # Actuator — health checks e métricas
 management:
@@ -44,6 +49,12 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     operationsSorter: method
+  components:
+    security-schemes:
+      bearerAuth:
+        type: http
+        scheme: bearer
+        bearerFormat: JWT
 
 ---
 # Perfil local — PostgreSQL local
@@ -72,6 +83,13 @@ logging:
 server:
   port: 8080
 
+nexora:
+  jwt:
+    secret: "uRqX8yTzLp9sNvFgHjKmQwErYtIoUaBcDfGhJkL0="
+    access-token-expiration-ms: 900000        # 15 minutos
+    refresh-token-expiration-ms: 604800000    # 7 dias
+
+
 ---
 # Perfil default (sem profile ativo) — aponta para local por conveniência
 spring:
@@ -92,6 +110,12 @@ logging:
 
 server:
   port: 8080
+
+nexora:
+  jwt:
+    secret: "X5pLqR8vY2zN4mB6jC7kF9hW0tG1uA3sD4eR6tY8uI="
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 604800000
 
 ---
 # Perfil test — usado apenas durante os testes unitários/integração
@@ -133,3 +157,9 @@ logging:
     com.nexora: DEBUG
     org.flywaydb: DEBUG
     org.h2: WARN
+
+nexora:
+  jwt:
+    secret: "kH9mN2bV5cX7zL4pQ8rT1wY3uA6sD9fG0jK2lM4nP6="
+    access-token-expiration-ms: 900000
+    refresh-token-expiration-ms: 604800000

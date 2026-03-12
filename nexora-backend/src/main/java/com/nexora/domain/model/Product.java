@@ -5,13 +5,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Entidade de domínio Product — sem dependências de framework.
- * Toda lógica de negócio referente ao produto vive aqui.
- * <p>
- * Melhoria: dois construtores explícitos:
- * - Criação nova (gera UUID + timestamps)
- * - Reconstituição da persistência (recebe todos os campos)
- * Isso torna as intenções claras e evita construtores ambíguos.
+ * Entidade de domínio Product — Fase 2: suporte a categoria.
  */
 public class Product {
 
@@ -21,120 +15,96 @@ public class Product {
     private String sku;
     private Money price;
     private StockQuantity stock;
+    private UUID categoryId;
     private boolean active;
     private final Instant createdAt;
     private Instant updatedAt;
 
-    // ─── Criação de novo produto ───────────────────────────────────────────
-
-    public static Product create(String name, String description, String sku, Money price, StockQuantity stock) {
-        return new Product(
-                UUID.randomUUID(),
-                name, description, sku,
-                price, stock,
-                true,
-                Instant.now(), Instant.now()
-        );
+    public static Product create(String name, String description, String sku,
+                                 Money price, StockQuantity stock) {
+        return create(name, description, sku, price, stock, null);
     }
 
-    // ─── Reconstituição da persistência ───────────────────────────────────
+    public static Product create(String name, String description, String sku,
+                                 Money price, StockQuantity stock, UUID categoryId) {
+        return new Product(UUID.randomUUID(), name, description, sku,
+                price, stock, categoryId, true, Instant.now(), Instant.now());
+    }
 
     public static Product reconstitute(
             UUID id, String name, String description, String sku,
             Money price, StockQuantity stock, boolean active,
-            Instant createdAt, Instant updatedAt
-    ) {
-        return new Product(id, name, description, sku, price, stock, active, createdAt, updatedAt);
+            Instant createdAt, Instant updatedAt) {
+        return new Product(id, name, description, sku, price, stock,
+                null, active, createdAt, updatedAt);
     }
 
-    // ─── Construtor privado ────────────────────────────────────────────────
-
-    private Product(
+    public static Product reconstitute(
             UUID id, String name, String description, String sku,
-            Money price, StockQuantity stock, boolean active,
-            Instant createdAt, Instant updatedAt
-    ) {
-        this.id = Objects.requireNonNull(id, "Product id cannot be null");
+            Money price, StockQuantity stock, UUID categoryId, boolean active,
+            Instant createdAt, Instant updatedAt) {
+        return new Product(id, name, description, sku, price, stock,
+                categoryId, active, createdAt, updatedAt);
+    }
+
+    private Product(UUID id, String name, String description, String sku,
+                    Money price, StockQuantity stock, UUID categoryId, boolean active,
+                    Instant createdAt, Instant updatedAt) {
+        this.id = Objects.requireNonNull(id);
         this.name = requireNonBlank(name, "Product name");
         this.description = description;
         this.sku = requireNonBlank(sku, "Product SKU");
-        this.price = Objects.requireNonNull(price, "Product price cannot be null");
-        this.stock = Objects.requireNonNull(stock, "Product stock cannot be null");
+        this.price = Objects.requireNonNull(price);
+        this.stock = Objects.requireNonNull(stock);
+        this.categoryId = categoryId;
         this.active = active;
-        this.createdAt = Objects.requireNonNull(createdAt, "createdAt cannot be null");
-        this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt cannot be null");
+        this.createdAt = Objects.requireNonNull(createdAt);
+        this.updatedAt = Objects.requireNonNull(updatedAt);
     }
-
-    // ─── Comportamentos de domínio ─────────────────────────────────────────
 
     public void updateDetails(String name, String description, Money price) {
         this.name = requireNonBlank(name, "Product name");
         this.description = description;
-        this.price = Objects.requireNonNull(price, "Product price cannot be null");
+        this.price = Objects.requireNonNull(price);
         this.updatedAt = Instant.now();
     }
 
-    public void replenishStock(int quantity) {
-        this.stock = this.stock.add(quantity);
-        this.updatedAt = Instant.now();
-    }
+    public void assignCategory(UUID categoryId) { this.categoryId = categoryId; this.updatedAt = Instant.now(); }
+    public void removeCategory()                { this.categoryId = null;       this.updatedAt = Instant.now(); }
 
-    public void withdrawStock(int quantity) {
-        this.stock = this.stock.subtract(quantity);
-        this.updatedAt = Instant.now();
-    }
+    public void replenishStock(int quantity) { this.stock = this.stock.add(quantity);      this.updatedAt = Instant.now(); }
+    public void withdrawStock(int quantity)  { this.stock = this.stock.subtract(quantity); this.updatedAt = Instant.now(); }
 
-    public void deactivate() {
-        this.active = false;
-        this.updatedAt = Instant.now();
-    }
-
-    public void activate() {
-        this.active = true;
-        this.updatedAt = Instant.now();
-    }
+    public void deactivate() { this.active = false; this.updatedAt = Instant.now(); }
+    public void activate()   { this.active = true;  this.updatedAt = Instant.now(); }
 
     public boolean isAvailable(int requestedQuantity) {
         return this.active && this.stock.isAvailableFor(requestedQuantity);
     }
 
-    // ─── Getters ───────────────────────────────────────────────────────────
+    public UUID          getId()          { return id; }
+    public String        getName()        { return name; }
+    public String        getDescription() { return description; }
+    public String        getSku()         { return sku; }
+    public Money         getPrice()       { return price; }
+    public StockQuantity getStock()       { return stock; }
+    public UUID          getCategoryId()  { return categoryId; }
+    public boolean       isActive()       { return active; }
+    public Instant       getCreatedAt()   { return createdAt; }
+    public Instant       getUpdatedAt()   { return updatedAt; }
 
-    public UUID getId()             { return id; }
-    public String getName()         { return name; }
-    public String getDescription()  { return description; }
-    public String getSku()          { return sku; }
-    public Money getPrice()         { return price; }
-    public StockQuantity getStock() { return stock; }
-    public boolean isActive()       { return active; }
-    public Instant getCreatedAt()   { return createdAt; }
-    public Instant getUpdatedAt()   { return updatedAt; }
-
-    // ─── Igualdade por identidade ──────────────────────────────────────────
-
-    @Override
-    public boolean equals(Object o) {
+    @Override public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Product product)) return false;
-        return Objects.equals(id, product.id);
+        if (!(o instanceof Product p)) return false;
+        return Objects.equals(id, p.id);
+    }
+    @Override public int hashCode() { return Objects.hash(id); }
+    @Override public String toString() {
+        return "Product{id=%s, sku='%s', active=%s}".formatted(id, sku, active);
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
-
-    @Override
-    public String toString() {
-        return "Product{id=%s, name='%s', sku='%s', active=%s}".formatted(id, name, sku, active);
-    }
-
-    // ─── Helper de validação ───────────────────────────────────────────────
-
-    private static String requireNonBlank(String value, String fieldName) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " cannot be blank");
-        }
-        return value;
+    private static String requireNonBlank(String v, String field) {
+        if (v == null || v.isBlank()) throw new IllegalArgumentException(field + " cannot be blank");
+        return v;
     }
 }
