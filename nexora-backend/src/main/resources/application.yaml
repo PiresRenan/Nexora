@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: nexora-backend
+
+  # Melhoria: Virtual Threads (Project Loom) — Java 21
+  threads:
+    virtual:
+      enabled: true
+
+  # JPA — NUNCA usar ddl-auto=create em produção
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+
+  # Flyway — controle de migrations
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
+# Actuator — health checks e métricas
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# OpenAPI / Swagger
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+
+---
+# Perfil local — PostgreSQL local
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nexora
+    username: postgres
+    password: 14262767
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.nexora: DEBUG
+    org.flywaydb: INFO
+
+server:
+  port: 8080
+
+---
+# Perfil default (sem profile ativo) — aponta para local por conveniência
+spring:
+  config:
+    activate:
+      on-profile: default
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nexora
+    username: postgres
+    password: 14262767
+    hikari:
+      maximum-pool-size: 5
+
+logging:
+  level:
+    com.nexora: INFO
+
+server:
+  port: 8080
