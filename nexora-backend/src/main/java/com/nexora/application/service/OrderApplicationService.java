@@ -213,6 +213,12 @@ public class OrderApplicationService implements OrderUseCase {
         return orderRepository.findAll(pageable).map(OrderResponse::fromDomain);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> findByStatus(OrderStatus status, Pageable pageable) {
+        return orderRepository.findByStatus(status, pageable).map(OrderResponse::fromDomain);
+    }
+
     private Order findOrThrow(UUID id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", id));

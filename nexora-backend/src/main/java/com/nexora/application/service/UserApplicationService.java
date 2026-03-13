@@ -16,6 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Caso de uso de gerenciamento de usuários por staff (MANAGER/ADMIN).
+ *
+ * Auto-cadastro público é responsabilidade do AuthApplicationService.
+ */
 @Service
 @Transactional
 public class UserApplicationService implements UserUseCase {
@@ -36,7 +41,7 @@ public class UserApplicationService implements UserUseCase {
 
     @Override
     public UserResponse createUser(CreateUserRequest request) {
-        log.info("Creating user email={}", request.email());
+        log.info("Admin creating user email={} role={}", request.email(), request.role());
         if (userRepository.existsByEmail(request.email().toLowerCase())) {
             throw new DuplicateResourceException("User", "email", request.email());
         }
@@ -46,7 +51,7 @@ public class UserApplicationService implements UserUseCase {
 
         eventPublisher.publish(UserRegisteredEvent.of(saved.getId(), saved.getEmail(), saved.getRole()));
 
-        log.info("User created id={}", saved.getId());
+        log.info("User created by admin id={}", saved.getId());
         return UserResponse.fromDomain(saved);
     }
 
@@ -89,8 +94,23 @@ public class UserApplicationService implements UserUseCase {
     @Override
     public void deleteUser(UUID id) {
         var user = findOrThrow(id);
+        if (!user.isActive()) {
+            throw new BusinessRuleException("User is already deactivated.");
+        }
         user.deactivate();
         userRepository.save(user);
+        log.info("User deactivated id={}", id);
+    }
+
+    @Override
+    public UserResponse activateUser(UUID id) {
+        var user = findOrThrow(id);
+        if (user.isActive()) {
+            throw new BusinessRuleException("User is already active.");
+        }
+        user.activate();
+        log.info("User reactivated id={}", id);
+        return UserResponse.fromDomain(userRepository.save(user));
     }
 
     private User findOrThrow(UUID id) {

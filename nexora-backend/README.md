@@ -144,9 +144,9 @@ Fundação do projeto com arquitetura hexagonal e as entidades centrais do siste
 Autenticação completa com JWT, ciclo de vida de pedidos e rastreamento de estoque.
 
 - **Spring Security + JWT** stateless
-    - Access Token: 15 minutos (HMAC-SHA256)
-    - Refresh Token: 7 dias
-    - `JwtAuthenticationFilter` popula `SecurityContext` a partir do Bearer token
+  - Access Token: 15 minutos (HMAC-SHA256)
+  - Refresh Token: 7 dias
+  - `JwtAuthenticationFilter` popula `SecurityContext` a partir do Bearer token
 - **Aggregate `Order`** com máquina de estados embutida no enum `OrderStatus`:
   ```
   PENDING → CONFIRMED → SHIPPED → DELIVERED
@@ -167,16 +167,16 @@ Autenticação completa com JWT, ciclo de vida de pedidos e rastreamento de esto
 Arquitetura orientada a eventos com Kafka e cache distribuído com Redis.
 
 - **Eventos de Domínio** imutáveis (`record` Java) no pacote `domain/event`:
-    - `OrderConfirmedEvent` — snapshot completo com itens e total
-    - `OrderCancelledEvent` — motivo e ID do executor
-    - `StockReplenishedEvent` — produto, quantidade e estoque resultante
-    - `UserRegisteredEvent` — email e papel do novo usuário
+  - `OrderConfirmedEvent` — snapshot completo com itens e total
+  - `OrderCancelledEvent` — motivo e ID do executor
+  - `StockReplenishedEvent` — produto, quantidade e estoque resultante
+  - `UserRegisteredEvent` — email e papel do novo usuário
 - **`EventPublisher`** — Output Port no domínio. Implementação Kafka na infraestrutura; bean no-op (`@ConditionalOnMissingBean`) habilita testes sem Kafka, sem configuração adicional
 - **`KafkaEventPublisher`** — roteamento automático por prefixo de tipo (`order.*` → `nexora.orders`, `stock.*` → `nexora.stock`, `user.*` → `nexora.users`); chave de partição = `aggregateId` (garante ordenação causal por entidade)
 - **Cache Redis** com TTLs distintos por cache (`CacheConfig`):
-    - `products`: 5 minutos
-    - `categories`: 30 minutos
-    - `stock`: 1 minuto
+  - `products`: 5 minutos
+  - `categories`: 30 minutos
+  - `stock`: 1 minuto
 - **`@Cacheable` / `@CacheEvict`** aplicados em todas as operações de leitura e escrita
 - **`KafkaConfig`** — cria tópicos Kafka automaticamente na inicialização (`@ConditionalOnProperty`)
 - **V9 Migration** — tabela `domain_events_outbox` (Transactional Outbox Pattern) + `revoked_tokens` (controle de invalidação de JWT)
@@ -429,28 +429,47 @@ docker-compose ps
 
 | Método | Endpoint | Acesso | Descrição |
 |--------|----------|--------|-----------|
-| `POST` | `/api/v1/auth/login` | Público | Login com email/senha → retorna JWT access + refresh token |
-| `POST` | `/api/v1/auth/refresh` | Público | Renova o access token usando um refresh token válido |
-| `GET` | `/api/v1/auth/me` | Autenticado | Dados do usuário logado |
+| `POST` | `/api/v1/auth/register` | **Público** | **Auto-cadastro de cliente** — cria conta CUSTOMER + retorna JWT imediato |
+| `POST` | `/api/v1/auth/login` | **Público** | Login com email/senha → access + refresh token |
+| `POST` | `/api/v1/auth/refresh` | **Público** | Renova o access token usando o refresh token |
+| `PATCH` | `/api/v1/auth/me/password` | Autenticado | Troca de senha — exige a senha atual para confirmar identidade |
+| `GET` | `/api/v1/auth/me` | Autenticado | Dados do perfil do usuário logado |
 
-**Exemplo — login:**
+> **Regra de papel:** `POST /auth/register` sempre cria usuários com papel `CUSTOMER`.
+> Para criar funcionários com papéis elevados (`SELLER`, `MANAGER`, `ADMIN`), use
+> `POST /api/v1/users` com credenciais de `MANAGER` ou `ADMIN`.
+
+**Exemplo — auto-cadastro público:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
+curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@nexora.com", "password": "admin@123"}'
+  -d '{
+    "name": "João Silva",
+    "email": "joao@email.com",
+    "password": "senha123"
+  }'
 ```
 
-**Resposta:**
+**Resposta (201 Created):**
 ```json
 {
   "accessToken":  "eyJhbGciOiJIUzI1NiJ9...",
   "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
   "tokenType":    "Bearer",
-  "expiresIn":    900000,
-  "userId":       "a0000000-0000-0000-0000-000000000001",
-  "email":        "admin@nexora.com",
-  "role":         "ADMIN"
+  "expiresIn":    900,
+  "userId":       "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "email":        "joao@email.com",
+  "role":         "CUSTOMER"
 }
+```
+
+**Exemplo — troca de senha:**
+```bash
+curl -X PATCH http://localhost:8080/api/v1/auth/me/password \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword": "senha123", "newPassword": "novaSenha456"}'
+# Retorna 204 No Content
 ```
 
 ---
@@ -504,7 +523,7 @@ curl -X POST http://localhost:8080/api/v1/products \
 | `POST` | `/api/v1/orders` | Autenticado | Criar pedido (`status: PENDING`) |
 | `GET` | `/api/v1/orders/my` | Autenticado | Meus pedidos (paginado) |
 | `GET` | `/api/v1/orders/{id}` | Autenticado * | Buscar por ID |
-| `GET` | `/api/v1/orders` | `SELLER+` | Listar todos os pedidos (paginado) |
+| `GET` | `/api/v1/orders` | `SELLER+` | Listar todos os pedidos (paginado). Filtro: `?status=PENDING` |
 | `POST` | `/api/v1/orders/{id}/confirm` | `SELLER+` | Confirmar → decrementa estoque + evento |
 | `POST` | `/api/v1/orders/{id}/ship` | `SELLER+` | Marcar como enviado |
 | `POST` | `/api/v1/orders/{id}/deliver` | `SELLER+` | Marcar como entregue |
@@ -535,18 +554,26 @@ curl -X POST http://localhost:8080/api/v1/orders \
   }'
 ```
 
----
-
-### Usuários — `/api/v1/users`
+### Estoque — `/api/v1/stock`
 
 | Método | Endpoint | Acesso | Descrição |
 |--------|----------|--------|-----------|
-| `POST` | `/api/v1/users` | `MANAGER+` | Criar usuário com papel definido |
+| `GET` | `/api/v1/stock/{productId}/movements` | `SELLER+` | Histórico de movimentações de um produto (paginado, mais recentes primeiro) |
+| `GET` | `/api/v1/stock/movements` | `MANAGER+` | Histórico global de todas as movimentações |
+
+> Escrita de estoque (reabastecimento) permanece em `PATCH /api/v1/products/{id}/stock/replenish`.
+
+---
+
+| Método | Endpoint | Acesso | Descrição |
+|--------|----------|--------|-----------|
+| `POST` | `/api/v1/users` | `MANAGER+` | Criar usuário com papel explícito (SELLER, MANAGER, ADMIN) |
 | `GET` | `/api/v1/users` | `MANAGER+` | Listar todos (`?role=CUSTOMER`) |
 | `GET` | `/api/v1/users/{id}` | `MANAGER+` | Buscar por ID |
 | `PUT` | `/api/v1/users/{id}` | `MANAGER+` | Atualizar nome e email |
 | `PATCH` | `/api/v1/users/{id}/role?role=SELLER` | `MANAGER+` | Alterar papel |
 | `DELETE` | `/api/v1/users/{id}` | `MANAGER+` | Desativar (soft delete) |
+| `PATCH` | `/api/v1/users/{id}/activate` | `MANAGER+` | Reativar usuário desativado |
 
 ---
 

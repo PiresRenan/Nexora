@@ -23,6 +23,21 @@ import org.springframework.web.cors.*;
 
 import java.util.List;
 
+/**
+ * Configuração de segurança do Nexora.
+ *
+ * Rota pública principal: POST /api/v1/auth/register
+ *   — permite auto-cadastro de clientes sem autenticação prévia.
+ *   — cria usuários com papel CUSTOMER (controlado pelo AuthApplicationService).
+ *
+ * Demais decisões de acesso:
+ *   - Leitura de produtos e categorias é pública (catálogo aberto)
+ *   - Pedidos exigem usuário autenticado (qualquer papel)
+ *   - Escrita de produtos: SELLER+
+ *   - Gestão de categorias e usuários: MANAGER+
+ *   - Histórico de estoque: SELLER+
+ *   - Actuator além de /health e /info: ADMIN
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -47,17 +62,27 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // ── Rotas totalmente públicas ──────────────────────────────
+                        .requestMatchers("/api/v1/auth/register").permitAll()    // auto-cadastro público
+                        .requestMatchers("/api/v1/auth/login").permitAll()
+                        .requestMatchers("/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+
+                        // ── Catálogo público (leitura) ─────────────────────────────
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
+
+                        // ── Rotas que exigem autenticação + papel específico ───────
                         .requestMatchers("/api/v1/products/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/categories/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/users/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/stock/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/orders/**").authenticated()
+
+                        // ── Actuator (acesso restrito) ─────────────────────────────
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 );
         return http.build();
@@ -84,7 +109,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://localhost:5173"   // Vite default (frontend típico)
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

@@ -7,22 +7,26 @@ import org.springframework.test.context.TestPropertySource;
 
 /**
  * Smoke test — garante que o ApplicationContext Spring sobe sem erros.
- * Usa H2 em memória + Kafka/Redis desabilitados (via application.yml de teste).
- * Flyway desabilitado — Hibernate cria o schema via create-drop.
+ *
+ * Usa H2 em memória + Flyway desabilitado + Kafka/Redis desabilitados
+ * (configurados via src/test/resources/application.yml).
+ * Hibernate cria o schema via create-drop para o H2.
  */
 @SpringBootTest
 @TestPropertySource(properties = {
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false"
 })
-@DisplayName("Spring Context loads successfully")
+@DisplayName("Spring context loads successfully")
 class NexoraApplicationTests {
 
     @Test
-    @DisplayName("Application context should start without errors")
+    @DisplayName("Application context deve subir sem erros de configuração")
     void contextLoads() {
-        // Se o contexto subir, o teste passa.
-        // Valida: beans configurados corretamente, sem dependências circulares,
-        // sem erros de binding de properties, sem conflitos de beans.
+        // Se este teste passar, todos os beans foram criados com sucesso:
+        //  - SecurityConfig (JwtFilter, AuthManager, etc.)
+        //  - EventPublisherConfig (no-op fallback ativo — sem Kafka)
+        //  - CacheConfig desabilitado (spring.cache.type=none)
+        //  - Todos os Application Services com injeção de dependência válida
     }
 }
