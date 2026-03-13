@@ -1,4 +1,4 @@
--- V6__create_stock_movements_table.sql
+-- V5__create_stock_movements_table.sql
 -- Auditoria completa de movimentos de estoque
 -- Imutável por design: nunca atualizar, apenas inserir
 

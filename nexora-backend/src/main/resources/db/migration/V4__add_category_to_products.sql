@@ -1,4 +1,4 @@
--- V5__add_category_to_products.sql
+-- V4__add_category_to_products.sql
 -- Adiciona referência de categoria aos produtos (opcional — nullable)
 ALTER TABLE products
     ADD COLUMN category_id UUID REFERENCES categories(id) ON DELETE SET NULL;

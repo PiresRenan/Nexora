@@ -294,13 +294,13 @@ nexora-backend/
     │       └── db/migration/
     │           ├── V1__create_users_table.sql
     │           ├── V2__create_products_table.sql
-    │           ├── V3__seed_initial_data.sql
-    │           ├── V4__create_categories_table.sql
-    │           ├── V5__add_category_to_products.sql
-    │           ├── V6__create_stock_movements_table.sql
-    │           ├── V7__create_orders_tables.sql
-    │           ├── V8__seed_phase2_data.sql
-    │           └── V9__phase3_kafka_outbox.sql
+    │           ├── V7__phase3_kafka_outbox.sql
+    │           ├── V3__create_categories_table.sql
+    │           ├── V4__add_category_to_products.sql
+    │           ├── V5__create_stock_movements_table.sql
+    │           ├── V6__create_orders_tables.sql
+    │           ├── V8__register_and_performace_indeexes.sql
+    │           └── V9__seed_initial_data.sql
     │
     └── test/
         ├── java/com/nexora/
@@ -687,13 +687,13 @@ O schema é gerenciado exclusivamente pelo **Flyway**. O Hibernate nunca altera 
 |--------|---------|-----------|
 | V1 | `V1__create_users_table.sql` | Tabela `users` — UUID PK, `role` VARCHAR, soft delete, índices explícitos |
 | V2 | `V2__create_products_table.sql` | Tabela `products` — `price`, `currency`, `stock_quantity`, SKU único |
-| V3 | `V3__seed_initial_data.sql` | Seeds: admin, gerente + 3 produtos iniciais |
-| V4 | `V4__create_categories_table.sql` | Tabela `categories` — nome único, soft delete |
-| V5 | `V5__add_category_to_products.sql` | FK `category_id` em `products` (nullable) |
-| V6 | `V6__create_stock_movements_table.sql` | Auditoria imutável de movimentações de estoque |
-| V7 | `V7__create_orders_tables.sql` | Tabelas `orders` + `order_items` (ElementCollection) |
-| V8 | `V8__seed_phase2_data.sql` | 4 categorias, `vendedor@nexora.com`, `cliente@nexora.com` |
-| V9 | `V9__phase3_kafka_outbox.sql` | `domain_events_outbox` (Outbox Pattern) + `revoked_tokens` |
+| V3 | `V7__phase3_kafka_outbox.sql` | Seeds: admin, gerente + 3 produtos iniciais |
+| V4 | `V3__create_categories_table.sql` | Tabela `categories` — nome único, soft delete |
+| V5 | `V4__add_category_to_products.sql` | FK `category_id` em `products` (nullable) |
+| V6 | `V5__create_stock_movements_table.sql` | Auditoria imutável de movimentações de estoque |
+| V7 | `V6__create_orders_tables.sql` | Tabelas `orders` + `order_items` (ElementCollection) |
+| V8 | `V8__register_and_performace_indeexes.sql` | 4 categorias, `vendedor@nexora.com`, `cliente@nexora.com` |
+| V9 | `V9__seed_initial_data.sql` | `domain_events_outbox` (Outbox Pattern) + `revoked_tokens` |
 
 ---
 

@@ -1,4 +1,4 @@
--- V10__register_and_performance_indexes.sql
+-- V8__register_and_performance_indexes.sql
 -- Ajustes de performance e consistência para suportar os novos endpoints:
 --   POST /api/v1/auth/register  (cadastro público)
 --   PATCH /api/v1/users/{id}/activate  (reativação)

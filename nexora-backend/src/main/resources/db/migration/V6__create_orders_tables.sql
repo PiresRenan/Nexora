@@ -1,4 +1,4 @@
--- V7__create_orders_tables.sql
+-- V6__create_orders_tables.sql
 
 CREATE TABLE orders (
                         id          UUID        NOT NULL,

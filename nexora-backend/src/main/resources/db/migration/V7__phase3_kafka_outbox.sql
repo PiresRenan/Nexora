@@ -1,4 +1,4 @@
--- V9__phase3_kafka_outbox.sql
+-- V7__phase3_kafka_outbox.sql
 -- Transactional Outbox Pattern — garante entrega confiável de eventos de domínio.
 -- Um job (ou Change Data Capture) lê esta tabela e publica no Kafka,
 -- evitando o problema de "dual write" (escrever no DB e no Kafka atomicamente).

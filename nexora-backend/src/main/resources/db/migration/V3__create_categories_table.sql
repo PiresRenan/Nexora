@@ -1,4 +1,4 @@
--- V4__create_categories_table.sql
+-- V3__create_categories_table.sql
 CREATE TABLE categories (
                             id          UUID        NOT NULL,
                             name        VARCHAR(80) NOT NULL,
