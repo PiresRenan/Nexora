@@ -7,8 +7,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.*;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -20,29 +19,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.*;
 
 import java.util.List;
 
-/**
- * Configuração central do Spring Security.
- *
- * Estratégia de autorização por rota (coarse-grained):
- * - /api/v1/auth/**       → público (login, refresh)
- * - GET /api/v1/products  → público (catálogo consultável sem login)
- * - POST/PUT/DELETE       → autenticado
- * - /api/v1/users/**      → MANAGER ou ADMIN
- * - /api/v1/orders/**     → autenticado (cliente vê os próprios)
- * - /actuator/**          → ADMIN
- *
- * Autorização fina (por recurso) é feita no UseCase via @PreAuthorize.
- */
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity           // habilita @PreAuthorize, @PostAuthorize
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableMethodSecurity
+@EnableConfigurationProperties({JwtProperties.class, NexoraProperties.class})
 public class SecurityConfig {
 
     private final NexoraUserDetailsService userDetailsService;
@@ -63,24 +47,19 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // ─── Rotas públicas ──────────────────────────────────────
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // Catálogo público (leitura)
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
-                        // ─── Rotas autenticadas ──────────────────────────────────
                         .requestMatchers("/api/v1/products/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/categories/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/users/**").hasAnyRole("MANAGER", "ADMIN")
-                        .requestMatchers("/api/v1/orders/**").authenticated()
                         .requestMatchers("/api/v1/stock/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
+                        .requestMatchers("/api/v1/orders/**").authenticated()
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
-                        // ─── Qualquer outra rota requer autenticação ─────────────
                         .anyRequest().authenticated()
                 );
-
         return http.build();
     }
 
@@ -109,7 +88,6 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
-
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
         return source;

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.nexora"
-version = "2.0.0-SNAPSHOT"
+version = "3.0.0-SNAPSHOT"
 
 java {
 	toolchain {
@@ -23,7 +23,7 @@ val springdocVersion = "2.6.0"
 val jjwtVersion = "0.12.6"
 
 dependencies {
-	// Spring Boot Starters
+	// Core
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -40,6 +40,13 @@ dependencies {
 	runtimeOnly("io.jsonwebtoken:jjwt-impl:${jjwtVersion}")
 	runtimeOnly("io.jsonwebtoken:jjwt-jackson:${jjwtVersion}")
 
+	// Redis
+	implementation("org.springframework.boot:spring-boot-starter-data-redis")
+	implementation("org.springframework.boot:spring-boot-starter-cache")
+
+	//Kafka
+	implementation("org.springframework.kafka:spring-kafka")
+
 	// OpenAPI / Swagger UI
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
 
@@ -53,6 +60,10 @@ dependencies {
 	testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testRuntimeOnly("com.h2database:h2")
+	testImplementation("org.springframework.kafka:spring-kafka-test")
+	testImplementation("org.testcontainers:kafka:${testcontainersVersion}")
+	// embedded Redis para testes unitários sem Docker
+	testImplementation("com.github.codemonstur:embedded-redis:1.4.3")
 }
 
 tasks.withType<Test> {

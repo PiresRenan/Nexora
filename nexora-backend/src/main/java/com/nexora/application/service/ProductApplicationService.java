@@ -1,21 +1,17 @@
 package com.nexora.application.service;
 
-import com.nexora.application.dto.product.CreateProductRequest;
-import com.nexora.application.dto.product.ProductResponse;
-import com.nexora.application.dto.product.UpdateProductRequest;
+import com.nexora.application.dto.product.*;
 import com.nexora.application.usecase.ProductUseCase;
-import com.nexora.domain.exception.BusinessRuleException;
-import com.nexora.domain.exception.DuplicateResourceException;
-import com.nexora.domain.exception.ResourceNotFoundException;
-import com.nexora.domain.model.Money;
-import com.nexora.domain.model.Product;
-import com.nexora.domain.model.StockMovement;
-import com.nexora.domain.model.StockQuantity;
-import com.nexora.domain.repository.CategoryRepository;
-import com.nexora.domain.repository.ProductRepository;
-import com.nexora.domain.repository.StockMovementRepository;
+import com.nexora.domain.event.StockReplenishedEvent;
+import com.nexora.domain.exception.*;
+import com.nexora.domain.model.*;
+import com.nexora.domain.port.EventPublisher;
+import com.nexora.domain.repository.*;
+import com.nexora.infrastructure.config.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,18 +28,22 @@ public class ProductApplicationService implements ProductUseCase {
     private final ProductRepository       productRepository;
     private final CategoryRepository      categoryRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final EventPublisher          eventPublisher;
 
     public ProductApplicationService(
-            ProductRepository productRepository,
-            CategoryRepository categoryRepository,
-            StockMovementRepository stockMovementRepository
+            ProductRepository       productRepository,
+            CategoryRepository      categoryRepository,
+            StockMovementRepository stockMovementRepository,
+            EventPublisher          eventPublisher
     ) {
         this.productRepository       = productRepository;
         this.categoryRepository      = categoryRepository;
         this.stockMovementRepository = stockMovementRepository;
+        this.eventPublisher          = eventPublisher;
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_PRODUCTS, allEntries = true)
     public ProductResponse createProduct(CreateProductRequest request) {
         if (productRepository.existsBySku(request.sku())) {
             throw new DuplicateResourceException("Product", "SKU", request.sku());
@@ -54,24 +54,21 @@ public class ProductApplicationService implements ProductUseCase {
                     .orElseThrow(() -> new ResourceNotFoundException("Category", request.categoryId()));
             categoryId = request.categoryId();
         }
-        var product = Product.create(
-                request.name(), request.description(), request.sku(),
+        var product = Product.create(request.name(), request.description(), request.sku(),
                 Money.of(request.price(), request.currency()),
-                StockQuantity.of(request.initialStock()),
-                categoryId
-        );
-        // Registra entrada de estoque inicial
+                StockQuantity.of(request.initialStock()), categoryId);
+
         if (request.initialStock() > 0) {
             stockMovementRepository.save(StockMovement.entry(
                     product.getId(), request.initialStock(), 0, request.initialStock(),
-                    "INITIAL_STOCK", null, null
-            ));
+                    "INITIAL_STOCK", null, null));
         }
-        log.info("Product created: {} (SKU: {})", product.getId(), request.sku());
+        log.info("Product created id={} sku={}", product.getId(), request.sku());
         return ProductResponse.fromDomain(productRepository.save(product));
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_PRODUCTS, key = "#id")
     public ProductResponse updateProduct(UUID id, UpdateProductRequest request) {
         var product = findOrThrow(id);
         product.updateDetails(request.name(), request.description(),
@@ -81,6 +78,7 @@ public class ProductApplicationService implements ProductUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_PRODUCTS, key = "#id")
     public ProductResponse findById(UUID id) {
         return ProductResponse.fromDomain(findOrThrow(id));
     }
@@ -104,20 +102,27 @@ public class ProductApplicationService implements ProductUseCase {
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_PRODUCTS, key = "#id")
     public ProductResponse replenishStock(UUID id, int quantity, UUID performedBy) {
         if (quantity <= 0) throw new BusinessRuleException("Quantity must be positive: " + quantity);
         var product = findOrThrow(id);
-        int before = product.getStock().value();
+        int before  = product.getStock().value();
         product.replenishStock(quantity);
         productRepository.save(product);
+
         stockMovementRepository.save(StockMovement.entry(
                 product.getId(), quantity, before, product.getStock().value(),
-                "MANUAL_REPLENISHMENT", null, performedBy
-        ));
+                "MANUAL_REPLENISHMENT", null, performedBy));
+
+        eventPublisher.publish(StockReplenishedEvent.of(
+                product.getId(), product.getSku(), quantity,
+                product.getStock().value(), "MANUAL_REPLENISHMENT", performedBy));
+
         return ProductResponse.fromDomain(product);
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_PRODUCTS, key = "#id")
     public void deleteProduct(UUID id) {
         var product = findOrThrow(id);
         product.deactivate();
@@ -125,8 +130,9 @@ public class ProductApplicationService implements ProductUseCase {
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_PRODUCTS, key = "#productId")
     public ProductResponse assignCategory(UUID productId, UUID categoryId) {
-        var product  = findOrThrow(productId);
+        var product = findOrThrow(productId);
         categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", categoryId));
         product.assignCategory(categoryId);

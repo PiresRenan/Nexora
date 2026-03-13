@@ -7,6 +7,11 @@ import com.nexora.domain.exception.DuplicateResourceException;
 import com.nexora.domain.exception.ResourceNotFoundException;
 import com.nexora.domain.model.Category;
 import com.nexora.domain.repository.CategoryRepository;
+import com.nexora.infrastructure.config.CacheConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +22,8 @@ import java.util.UUID;
 @Transactional
 public class CategoryApplicationService implements CategoryUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(CategoryApplicationService.class);
+
     private final CategoryRepository categoryRepository;
 
     public CategoryApplicationService(CategoryRepository categoryRepository) {
@@ -24,15 +31,18 @@ public class CategoryApplicationService implements CategoryUseCase {
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_CATEGORIES, allEntries = true)
     public CategoryResponse create(CreateCategoryRequest request) {
         if (categoryRepository.existsByName(request.name())) {
             throw new DuplicateResourceException("Category", "name", request.name());
         }
         var category = Category.create(request.name(), request.description());
+        log.info("Category created: {}", request.name());
         return CategoryResponse.fromDomain(categoryRepository.save(category));
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_CATEGORIES, allEntries = true)
     public CategoryResponse update(UUID id, CreateCategoryRequest request) {
         var category = findOrThrow(id);
         category.update(request.name(), request.description());
@@ -41,12 +51,14 @@ public class CategoryApplicationService implements CategoryUseCase {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_CATEGORIES, key = "#id")
     public CategoryResponse findById(UUID id) {
         return CategoryResponse.fromDomain(findOrThrow(id));
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = CacheConfig.CACHE_CATEGORIES, key = "'all'")
     public List<CategoryResponse> findAll() {
         return categoryRepository.findAll().stream().map(CategoryResponse::fromDomain).toList();
     }
@@ -58,6 +70,7 @@ public class CategoryApplicationService implements CategoryUseCase {
     }
 
     @Override
+    @CacheEvict(value = CacheConfig.CACHE_CATEGORIES, allEntries = true)
     public void delete(UUID id) {
         var category = findOrThrow(id);
         category.deactivate();
@@ -69,15 +82,3 @@ public class CategoryApplicationService implements CategoryUseCase {
                 .orElseThrow(() -> new ResourceNotFoundException("Category", id));
     }
 }
-//===== src/main/java/com/nexora/application/dto/product/ProductResponse.java =====
-//===== src/main/java/com/nexora/application/usecase/ProductUseCase.java =====
-//===== src/main/java/com/nexora/adapter/input/rest/ProductController.java =====
-//===== src/main/java/com/nexora/adapter/input/rest/OrderController.java =====
-//===== src/main/java/com/nexora/domain/model/Product.java =====
-//===== src/main/java/com/nexora/domain/model/Order.java =====
-//===== src/main/java/com/nexora/domain/repository/ProductRepository.java =====
-//===== src/main/java/com/nexora/adapter/output/persistence/ProductPersistenceAdapter.java =====
-//===== src/main/java/com/nexora/adapter/output/persistence/jpa/ProductJpaRepository.java =====
-//===== src/main/resources/db/migration/V1__create_users_table.sql =====
-//===== src/test/java/com/nexora/application/service/OrderApplicationServiceTest.java =====
-//===== src/test/java/com/nexora/NexoraApplicationTests.java =====

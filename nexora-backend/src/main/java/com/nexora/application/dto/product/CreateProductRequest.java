@@ -1,7 +1,7 @@
-package com.nexora.application.dto.product;
+        package com.nexora.application.dto.product;
 
 import jakarta.validation.constraints.*;
-import java.math.BigDecimal;
+        import java.math.BigDecimal;
 import java.util.UUID;
 
 public record CreateProductRequest(

@@ -1,4 +1,4 @@
-package com.nexora.application.dto.product;
+        package com.nexora.application.dto.product;
 
 import com.nexora.domain.model.Product;
 import java.math.BigDecimal;

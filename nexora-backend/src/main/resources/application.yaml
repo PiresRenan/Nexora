@@ -1,7 +1,6 @@
 spring:
   application:
     name: nexora-backend
-
   # Melhoria: Virtual Threads (Project Loom) — Java 21
   threads:
     virtual:
@@ -24,6 +23,7 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-version: 1
     baseline-on-migrate: false
     validate-on-migrate: true
   security:
@@ -64,7 +64,7 @@ spring:
       on-profile: local
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/nexora
+    url: jdbc:postgresql://postgres:5432/nexora
     username: postgres
     password: 14262767
     hikari:
@@ -75,10 +75,41 @@ spring:
   jpa:
     show-sql: true
 
+# Redis Configuration
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 2000ms
+
+# Kafka Configuration
+kafka:
+  bootstrap-servers: kafka:9092
+  producer:
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    properties:
+      spring.json.add.type.headers: false
+  consumer:
+    group-id: nexora-backend
+    auto-offset-reset: earliest
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    properties:
+      spring.json.trusted.packages: "com.nexora.*"
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000   # 5 minutos
+
+
 logging:
   level:
     com.nexora: DEBUG
     org.flywaydb: INFO
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
 
 server:
   port: 8080
@@ -88,6 +119,11 @@ nexora:
     secret: "uRqX8yTzLp9sNvFgHjKmQwErYtIoUaBcDfGhJkL0="
     access-token-expiration-ms: 900000        # 15 minutos
     refresh-token-expiration-ms: 604800000    # 7 dias
+  kafka:
+    topics:
+      orders: nexora.orders
+      stock: nexora.stock
+      users: nexora.users
 
 
 ---
@@ -98,11 +134,37 @@ spring:
       on-profile: default
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/nexora
+    url: jdbc:postgresql://postgres:5432/nexora
     username: postgres
     password: 14262767
     hikari:
       maximum-pool-size: 5
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      timeout: 2000ms
+
+    kafka:
+      bootstrap-servers: kafka:9092
+      producer:
+        key-serializer: org.apache.kafka.common.serialization.StringSerializer
+        value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+        properties:
+          spring.json.add.type.headers: false
+      consumer:
+        group-id: nexora-backend
+        auto-offset-reset: earliest
+        key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+        value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+        properties:
+          spring.json.trusted.packages: "com.nexora.*"
+
+    cache:
+      type: redis
+      redis:
+        time-to-live: 300000
 
 logging:
   level:
@@ -116,6 +178,11 @@ nexora:
     secret: "X5pLqR8vY2zN4mB6jC7kF9hW0tG1uA3sD4eR6tY8uI="
     access-token-expiration-ms: 900000
     refresh-token-expiration-ms: 604800000
+  kafka:
+    topics:
+      orders: nexora.orders
+      stock: nexora.stock
+      users: nexora.users
 
 ---
 # Perfil test — usado apenas durante os testes unitários/integração
@@ -123,9 +190,8 @@ spring:
   config:
     activate:
       on-profile: test
-
   datasource:
-    url: jdbc:h2:mem:nexora_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=VALUE,USER
+    url: jdbc:h2:mem:nexora_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;NON_KEYWORDS=USER,VALUE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -146,20 +212,28 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations: classpath:db/migration,classpath:db/migration-h2
+    baseline-version: 1
     baseline-on-migrate: false
     validate-on-migrate: true
-    # Ignora migrations que falharem em sintaxe incompatível (opcional, use com cautela)
-    # ignore-migration-patterns: "*:ignored,*:pending"
-
-logging:
-  level:
-    com.nexora: DEBUG
-    org.flywaydb: DEBUG
-    org.h2: WARN
-
+    cache:
+      type: none
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
 nexora:
   jwt:
     secret: "kH9mN2bV5cX7zL4pQ8rT1wY3uA6sD9fG0jK2lM4nP6="
     access-token-expiration-ms: 900000
     refresh-token-expiration-ms: 604800000
+  kafka:
+    topics:
+      orders: nexora.orders
+      stock: nexora.stock
+      users: nexora.users
+
+logging:
+  level:
+    com.nexora: DEBUG
+    org.flywaydb: DEBUG
