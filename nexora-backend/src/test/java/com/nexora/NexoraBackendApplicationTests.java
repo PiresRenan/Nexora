@@ -6,27 +6,26 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Smoke test — garante que o ApplicationContext Spring sobe sem erros.
+ * Smoke test — ApplicationContext sobe sem erros com toda a Fase 4.
  *
- * Usa H2 em memória + Flyway desabilitado + Kafka/Redis desabilitados
- * (configurados via src/test/resources/application.yml).
- * Hibernate cria o schema via create-drop para o H2.
+ * Condições ativas:
+ *  - H2 em memória (Flyway desabilitado, Hibernate cria via create-drop)
+ *  - Kafka/Redis desabilitados via autoconfigure.exclude
+ *  - MinIO: nexora.storage.endpoint AUSENTE → MinioConfig não criado
+ *    → MinioStorageAdapter não criado → StorageAdapterConfig cria no-op
  */
 @SpringBootTest
 @TestPropertySource(properties = {
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false"
 })
-@DisplayName("Spring context loads successfully")
+@DisplayName("Spring context loads with all Phase 4 beans")
 class NexoraApplicationTests {
 
     @Test
-    @DisplayName("Application context deve subir sem erros de configuração")
+    @DisplayName("Context must start without errors")
     void contextLoads() {
-        // Se este teste passar, todos os beans foram criados com sucesso:
-        //  - SecurityConfig (JwtFilter, AuthManager, etc.)
-        //  - EventPublisherConfig (no-op fallback ativo — sem Kafka)
-        //  - CacheConfig desabilitado (spring.cache.type=none)
-        //  - Todos os Application Services com injeção de dependência válida
+        // Valida: todos os beans criados, sem dependências circulares,
+        // StoragePort no-op ativo, EventPublisher no-op ativo
     }
 }

@@ -26,22 +26,23 @@ import java.util.List;
 /**
  * Configuração de segurança do Nexora.
  *
- * Rota pública principal: POST /api/v1/auth/register
- *   — permite auto-cadastro de clientes sem autenticação prévia.
- *   — cria usuários com papel CUSTOMER (controlado pelo AuthApplicationService).
+ * Política de acesso para attachments:
+ *  - GET  /attachments/products/{id}         → público (imagens de catálogo)
+ *  - POST /attachments/products/{id}/images  → SELLER+ (upload de imagem)
+ *  - POST /attachments/products/{id}/documents → SELLER+ (nota fiscal, manual)
+ *  - POST /attachments/users/{id}/photo      → autenticado (próprio usuário ou MANAGER+)
+ *  - POST /attachments/users/{id}/documents  → MANAGER+ (documentos pessoais)
+ *  - GET  /attachments/users/{id}            → MANAGER+ ou próprio usuário
+ *  - GET  /attachments/{id}/url              → autenticado
+ *  - DELETE /attachments/{id}                → SELLER+
  *
- * Demais decisões de acesso:
- *   - Leitura de produtos e categorias é pública (catálogo aberto)
- *   - Pedidos exigem usuário autenticado (qualquer papel)
- *   - Escrita de produtos: SELLER+
- *   - Gestão de categorias e usuários: MANAGER+
- *   - Histórico de estoque: SELLER+
- *   - Actuator além de /health e /info: ADMIN
+ * Controles mais granulares (ex: "apenas o próprio usuário pode ver seus documentos")
+ * são aplicados via @PreAuthorize no AttachmentController.
  */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties({JwtProperties.class, NexoraProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, NexoraProperties.class, StorageProperties.class})
 public class SecurityConfig {
 
     private final NexoraUserDetailsService userDetailsService;
@@ -62,8 +63,9 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+
                         // ── Rotas totalmente públicas ──────────────────────────────
-                        .requestMatchers("/api/v1/auth/register").permitAll()    // auto-cadastro público
+                        .requestMatchers("/api/v1/auth/register").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/swagger-ui.html").permitAll()
@@ -73,14 +75,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
 
-                        // ── Rotas que exigem autenticação + papel específico ───────
+                        // ── Imagens de produto: leitura pública (catálogo) ─────────
+                        .requestMatchers(HttpMethod.GET, "/api/v1/attachments/products/**").permitAll()
+
+                        // ── Attachments: escrita e listagem de usuários (autenticado) ─
+                        .requestMatchers("/api/v1/attachments/**").authenticated()
+
+                        // ── Demais rotas por papel ─────────────────────────────────
                         .requestMatchers("/api/v1/products/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/categories/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/users/**").hasAnyRole("MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/stock/**").hasAnyRole("SELLER", "MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/orders/**").authenticated()
-
-                        // ── Actuator (acesso restrito) ─────────────────────────────
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
 
                         .anyRequest().authenticated()
@@ -112,7 +118,7 @@ public class SecurityConfig {
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "http://localhost:5173"   // Vite default (frontend típico)
+                "http://localhost:5173"
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

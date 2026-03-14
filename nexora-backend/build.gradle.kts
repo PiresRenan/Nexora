@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.nexora"
-version = "3.0.0-SNAPSHOT"
+version = "4.0.0-SNAPSHOT"
 
 java {
 	toolchain {
@@ -21,6 +21,7 @@ repositories {
 val testcontainersVersion = "1.20.1"
 val springdocVersion = "2.6.0"
 val jjwtVersion = "0.12.6"
+val minioVersion = "8.5.11"
 
 dependencies {
 	// Core
@@ -44,13 +45,16 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-redis")
 	implementation("org.springframework.boot:spring-boot-starter-cache")
 
-	//Kafka
+	// Kafka
 	implementation("org.springframework.kafka:spring-kafka")
+
+	// MinIO
+	implementation("io.minio:minio:${minioVersion}")
 
 	// OpenAPI / Swagger UI
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
 
-	// Security utils (BCrypt sem Spring Security completo ainda)
+	// Security utils
 	implementation("org.springframework.security:spring-security-crypto")
 
 	// Testing
@@ -61,7 +65,8 @@ dependencies {
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testRuntimeOnly("com.h2database:h2")
 	testImplementation("org.springframework.kafka:spring-kafka-test")
-	testImplementation("org.testcontainers:kafka:${testcontainersVersion}")
+	testImplementation("org.testcontainers:kafka:$testcontainersVersion")
+	testImplementation("org.testcontainers:minio:$testcontainersVersion")
 	// embedded Redis para testes unitários sem Docker
 	testImplementation("com.github.codemonstur:embedded-redis:1.4.3")
 }
@@ -93,6 +98,7 @@ tasks.jacocoTestReport {
 			fileTree(it) {
 				exclude(
 					"**/infrastructure/persistence/entity/**",
+					"**/infrastructure/storage/**",
 					"**/NexoraApplication*",
 					"**/config/**"
 				)
